@@ -22,6 +22,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var last_y: Float = 0.0f
     private var last_z: Float = 0.0f
     private val shakeThreshold: Float = 800.0f // 흔들림 감지 임계값
+    private val activationThreshold: Long = 1000
 
     private var buttonPressTimes = mutableMapOf<ImageView, Long>()
     private var isButtonPressed = mutableMapOf<ImageView, Boolean>()
@@ -61,20 +62,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     MotionEvent.ACTION_DOWN -> {
                         buttonPressTimes[v as ImageView] = System.currentTimeMillis()
                         isButtonPressed[v] = true
+                        resetAllTimersExcept(v)
                     }
                     MotionEvent.ACTION_UP -> {
                         isButtonPressed[v as ImageView] = false
+                        resetAllTimers()
                     }
                 }
-
-                if (!imageSet && isButtonPressed.all { it.value }) {
-                    val allPressedFor2Seconds = buttonPressTimes.all {
-                        System.currentTimeMillis() - it.value >= 2000
-                    }
-                    if (allPressedFor2Seconds) {
-                        setRandomImages()
-                    }
-                }
+                checkAndSetImages()
                 true
             }
         }
@@ -125,19 +120,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         imageSet = false
     }
 
-    private fun setRandomImages() {
-        val images = listOf(
-            R.drawable.block_east,
-            R.drawable.block_west,
-            R.drawable.block_south,
-            R.drawable.block_north
-        )
-
+    private fun setRandomImages(blocksToChange: List<ImageView>, images: List<Int>) {
         val shuffledImages = images.shuffled()
 
-        blocks.forEachIndexed { index, block ->
+        blocksToChange.forEachIndexed { index, block ->
             block.setImageResource(shuffledImages[index])
         }
+
+        backs.filter { it in blocksToChange }.forEach { it.visibility = ImageView.VISIBLE }
 
         val randomBack = backs[Random.nextInt(backs.size)]
         randomBack.visibility = ImageView.VISIBLE
@@ -146,6 +136,34 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         if (vibrator.hasVibrator()) {
             vibrator.vibrate(100)
+        }
+    }
+
+    private fun checkAndSetImages() {
+        val pressedBlocks = isButtonPressed.filter { it.value }.keys.toList()
+        if (pressedBlocks.isNotEmpty()) {
+            val allPressedForThreshold = buttonPressTimes.all {
+                System.currentTimeMillis() - it.value >= activationThreshold
+            }
+
+            if (!imageSet && allPressedForThreshold) {
+                when (pressedBlocks.size) {
+                    3 -> setRandomImages(pressedBlocks, listOf(R.drawable.block_east, R.drawable.block_west, R.drawable.block_south))
+                    4 -> setRandomImages(pressedBlocks, listOf(R.drawable.block_east, R.drawable.block_west, R.drawable.block_south, R.drawable.block_north))
+                }
+            }
+        }
+    }
+
+    private fun resetAllTimersExcept(currentBlock: ImageView) {
+        buttonPressTimes.keys.filter { it != currentBlock }.forEach {
+            buttonPressTimes[it] = System.currentTimeMillis()
+        }
+    }
+
+    private fun resetAllTimers() {
+        buttonPressTimes.keys.forEach {
+            buttonPressTimes[it] = System.currentTimeMillis()
         }
     }
 }
